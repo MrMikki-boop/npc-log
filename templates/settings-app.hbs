@@ -1,0 +1,85 @@
+<form class="npc-log-settings-form">
+  <header class="npc-log-settings-header">
+    <i class="fas fa-book" aria-hidden="true"></i>
+    <div>
+      <h2>{{localize "NPCLOG.Settings.App.Title"}}</h2>
+      <p>{{localize "NPCLOG.Settings.App.Intro"}}</p>
+    </div>
+  </header>
+
+  <div class="npc-log-settings-body">
+    <section class="npc-log-settings-panel">
+      <div class="npc-log-settings-panel__header">
+        <i class="fas fa-location-dot" aria-hidden="true"></i>
+        <h3>{{localize "NPCLOG.Settings.App.TargetSection"}}</h3>
+      </div>
+
+      <div class="form-group">
+        <label for="npc-log-target-journal">{{localize "NPCLOG.Settings.TargetJournal.Name"}}</label>
+        <select id="npc-log-target-journal" name="targetJournalUuid">
+          <option value="">{{localize "NPCLOG.Settings.App.NoJournal"}}</option>
+          {{selectOptions journals selected=settings.targetJournalUuid valueAttr="value" labelAttr="label"}}
+        </select>
+        <p class="notes">{{localize "NPCLOG.Settings.TargetJournal.Hint"}}</p>
+      </div>
+
+      <div class="form-group">
+        <label for="npc-log-target-page">{{localize "NPCLOG.Settings.TargetPage.Name"}}</label>
+        <select id="npc-log-target-page" name="targetPageUuid">
+          <option value="">{{localize "NPCLOG.Settings.App.NoPage"}}</option>
+          {{selectOptions pages selected=settings.targetPageUuid valueAttr="value" labelAttr="label"}}
+        </select>
+        <p class="notes">{{localize "NPCLOG.Settings.TargetPage.Hint"}}</p>
+      </div>
+    </section>
+
+    <section class="npc-log-settings-panel">
+      <div class="npc-log-settings-panel__header">
+        <i class="fas fa-sliders" aria-hidden="true"></i>
+        <h3>{{localize "NPCLOG.Settings.Advanced.Title"}}</h3>
+      </div>
+
+      <label class="checkbox npc-log-setting-toggle">
+        <input type="checkbox" name="advancedSettingsEnabled" {{checked settings.advancedSettingsEnabled}}>
+        <span>{{localize "NPCLOG.Settings.Advanced.Enabled.Name"}}</span>
+      </label>
+      <p class="notes">{{localize "NPCLOG.Settings.Advanced.Enabled.Hint"}}</p>
+
+      <div class="npc-log-advanced-block" data-advanced-settings>
+        <label class="checkbox">
+          <input type="checkbox" name="showImageSizeInAddDialog" {{checked settings.showImageSizeInAddDialog}}>
+          {{localize "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Name"}}
+        </label>
+        <p class="notes">{{localize "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Hint"}}</p>
+
+        <div class="form-group">
+          <label for="npc-log-duplicate-mode">{{localize "NPCLOG.Settings.DuplicateMode.Name"}}</label>
+          <select id="npc-log-duplicate-mode" name="duplicateMode">
+            {{selectOptions duplicateModes selected=settings.duplicateMode valueAttr="value" labelAttr="label" localize=true}}
+          </select>
+          <p class="notes">{{localize "NPCLOG.Settings.DuplicateMode.Hint"}}</p>
+        </div>
+
+        <div class="form-group stacked">
+          <label>{{metaSection.title}}</label>
+          <div class="npc-log-checkbox-list">
+            {{#each metaSection.options}}
+              <label class="checkbox">
+                <input type="checkbox" name="{{name}}" {{checked checked}}>
+                {{localize label}}
+              </label>
+            {{/each}}
+          </div>
+          <p class="notes">{{localize metaSection.hint}}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="form-footer npc-log-settings-footer">
+    <button type="button" data-action="save">
+      <i class="fas fa-save" aria-hidden="true"></i>
+      {{localize "NPCLOG.Settings.App.Save"}}
+    </button>
+  </footer>
+</form>

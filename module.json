@@ -1,0 +1,40 @@
+{
+  "id": "npc-log",
+  "title": "NPC Log",
+  "version": "1.0.0",
+  "description": "Keep important NPCs visible during play by adding actors to a configured journal page with portrait or token art, a short description, and system-aware details.",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "authors": [
+    {
+      "name": "MaxKoffing",
+      "url": "https://github.com/MrMikki-boop",
+      "flags": {}
+    }
+  ],
+  "flags": {
+    "canUpload": true
+  },
+  "esmodules": [
+    "scripts/main.mjs"
+  ],
+  "styles": [
+    "styles/npc-log.css"
+  ],
+  "license": "LICENSE",
+  "readme": "README.md",
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "languages/en.json"
+    },
+    {
+      "lang": "ru",
+      "name": "Russian",
+      "path": "languages/ru.json"
+    }
+  ]
+}

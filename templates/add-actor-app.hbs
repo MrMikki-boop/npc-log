@@ -1,0 +1,74 @@
+<form class="npc-log-form">
+  <div class="npc-log-actor-preview">
+    <img src="{{selectedImage}}" alt="{{actor.name}}">
+    <div>
+      <h2>{{actor.name}}</h2>
+      <p>{{targetLabel}}</p>
+    </div>
+  </div>
+
+  {{#unless hasTarget}}
+    {{#if autoCreate}}
+      <p class="notes">{{localize "NPCLOG.AddActor.AutoCreateNote"}}</p>
+    {{else}}
+      <p class="notes warning">{{localize "NPCLOG.AddActor.ConfigureFirst"}}</p>
+    {{/if}}
+  {{/unless}}
+
+  <div class="form-group">
+    <label for="npc-log-image-mode">{{localize "NPCLOG.AddActor.ImageMode"}}</label>
+    <select id="npc-log-image-mode" name="imageMode">
+      {{selectOptions imageModes selected=imageMode valueAttr="value" labelAttr="label" localize=true}}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="npc-log-card-style">{{localize "NPCLOG.AddActor.CardStyle"}}</label>
+    <select id="npc-log-card-style" name="cardStyle">
+      {{selectOptions cardStyles selected=cardStyle valueAttr="value" labelAttr="label" localize=true}}
+    </select>
+  </div>
+
+  {{#if showImageSizeInAddDialog}}
+    <div class="form-group">
+      <label for="npc-log-card-image-size-add">{{localize "NPCLOG.Settings.CardImageSize.Name"}}</label>
+      <select id="npc-log-card-image-size-add" name="cardImageSize">
+        {{selectOptions cardImageSizes selected=cardImageSize valueAttr="value" labelAttr="label" localize=true}}
+      </select>
+    </div>
+  {{/if}}
+
+  <div class="form-group">
+    <label for="npc-log-target-journal-add">{{localize "NPCLOG.Settings.TargetJournal.Name"}}</label>
+    <select id="npc-log-target-journal-add" name="journalUuid">
+      <option value="">{{localize "NPCLOG.Settings.App.NoJournal"}}</option>
+      {{selectOptions journals selected=target.journalUuid valueAttr="value" labelAttr="label"}}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="npc-log-target-page-add">{{localize "NPCLOG.Settings.TargetPage.Name"}}</label>
+    <select id="npc-log-target-page-add" name="pageUuid">
+      <option value="">{{localize "NPCLOG.Settings.App.NoPage"}}</option>
+      {{selectOptions pages selected=target.pageUuid valueAttr="value" labelAttr="label"}}
+    </select>
+  </div>
+
+  <div class="form-group stacked">
+    <label for="npc-log-description">{{localize "NPCLOG.AddActor.Description"}}</label>
+    <textarea id="npc-log-description" name="description" rows="4">{{description}}</textarea>
+    <p class="notes">{{localize "NPCLOG.AddActor.DescriptionHint"}}</p>
+  </div>
+
+  <label class="checkbox">
+    <input type="checkbox" name="openAfterSave">
+    {{localize "NPCLOG.AddActor.OpenAfterSave"}}
+  </label>
+
+  <footer class="form-footer">
+    <button type="button" data-action="add">
+      <i class="fas fa-book" aria-hidden="true"></i>
+      {{localize "NPCLOG.Actions.AddToNpcLog"}}
+    </button>
+  </footer>
+</form>
