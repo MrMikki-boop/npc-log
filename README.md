@@ -25,6 +25,14 @@ The module is system-agnostic by default and includes small integrations for com
 4. Right-click an actor in the Actor Directory, use the actor sheet header menu, or select a token and use the Token Controls button.
 5. Review the image, target page, and description, then add the NPC to the journal.
 
+## Installation
+
+Use this manifest URL in Foundry VTT:
+
+```text
+https://github.com/MrMikki-boop/npc-log/releases/latest/download/module.json
+```
+
 ## Settings
 
 NPC Log uses two layers of settings:
@@ -77,6 +85,17 @@ When **Share NPC journal with players** is enabled, the module sets the target j
 ## Development Notes
 
 The implementation avoids libWrapper and other runtime dependencies. It uses Foundry hooks, ApplicationV2, Handlebars templates, DOM APIs, scoped CSS, and a small public API. See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation notes.
+
+## Release
+
+Releases are published from version tags. Update `module.json` version and `download`, commit the change, then push a matching tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow validates JSON, checks `.mjs` syntax, builds `npc-log.zip`, and uploads both `npc-log.zip` and `module.json` to the GitHub Release.
 
 ## License
 

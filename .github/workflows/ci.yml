@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  validate:
+    name: Validate package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate JSON files
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          for (const file of ["module.json", "languages/en.json", "languages/ru.json"]) {
+            JSON.parse(fs.readFileSync(file, "utf8"));
+            console.log(`${file} ok`);
+          }
+          const en = JSON.parse(fs.readFileSync("languages/en.json", "utf8"));
+          const ru = JSON.parse(fs.readFileSync("languages/ru.json", "utf8"));
+          const missing = Object.keys(en).filter((key) => !(key in ru));
+          const extra = Object.keys(ru).filter((key) => !(key in en));
+          if (missing.length || extra.length) {
+            console.error("Localization key mismatch", { missing, extra });
+            process.exit(1);
+          }
+          NODE
+
+      - name: Check JavaScript syntax
+        run: |
+          find scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check
