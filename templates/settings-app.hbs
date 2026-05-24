@@ -1,6 +1,5 @@
 <form class="npc-log-settings-form">
   <header class="npc-log-settings-header">
-    <i class="fas fa-book" aria-hidden="true"></i>
     <div>
       <h2>{{localize "NPCLOG.Settings.App.Title"}}</h2>
       <p>{{localize "NPCLOG.Settings.App.Intro"}}</p>
@@ -10,7 +9,6 @@
   <div class="npc-log-settings-body">
     <section class="npc-log-settings-panel">
       <div class="npc-log-settings-panel__header">
-        <i class="fas fa-location-dot" aria-hidden="true"></i>
         <h3>{{localize "NPCLOG.Settings.App.TargetSection"}}</h3>
       </div>
 
@@ -35,23 +33,16 @@
 
     <section class="npc-log-settings-panel">
       <div class="npc-log-settings-panel__header">
-        <i class="fas fa-sliders" aria-hidden="true"></i>
         <h3>{{localize "NPCLOG.Settings.Advanced.Title"}}</h3>
       </div>
 
-      <label class="checkbox npc-log-setting-toggle">
-        <input type="checkbox" name="advancedSettingsEnabled" {{checked settings.advancedSettingsEnabled}}>
+      <label class="checkbox npc-log-setting-toggle npc-log-settings-checkbox-row">
         <span>{{localize "NPCLOG.Settings.Advanced.Enabled.Name"}}</span>
+        <input type="checkbox" name="advancedSettingsEnabled" {{checked settings.advancedSettingsEnabled}}>
       </label>
       <p class="notes">{{localize "NPCLOG.Settings.Advanced.Enabled.Hint"}}</p>
 
       <div class="npc-log-advanced-block" data-advanced-settings>
-        <label class="checkbox">
-          <input type="checkbox" name="showImageSizeInAddDialog" {{checked settings.showImageSizeInAddDialog}}>
-          {{localize "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Name"}}
-        </label>
-        <p class="notes">{{localize "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Hint"}}</p>
-
         <div class="form-group">
           <label for="npc-log-duplicate-mode">{{localize "NPCLOG.Settings.DuplicateMode.Name"}}</label>
           <select id="npc-log-duplicate-mode" name="duplicateMode">
@@ -60,17 +51,47 @@
           <p class="notes">{{localize "NPCLOG.Settings.DuplicateMode.Hint"}}</p>
         </div>
 
-        <div class="form-group stacked">
-          <label>{{metaSection.title}}</label>
-          <div class="npc-log-checkbox-list">
-            {{#each metaSection.options}}
-              <label class="checkbox">
-                <input type="checkbox" name="{{name}}" {{checked checked}}>
-                {{localize label}}
-              </label>
+        <div class="form-group stacked npc-log-additional-fields-group">
+          <label>{{localize "NPCLOG.Settings.CustomFields.Name"}}</label>
+          <div class="npc-log-additional-fields" data-additional-fields>
+            {{#each additionalFields}}
+              {{#if isPlaceholder}}
+                <div class="npc-log-additional-field-row npc-log-additional-field-row--placeholder" data-additional-field-placeholder>
+                  <select name="additionalFieldChoice">
+                    {{selectOptions choices valueAttr="value" labelAttr="label"}}
+                  </select>
+                </div>
+              {{else}}
+                {{#if isCustom}}
+                  <div class="npc-log-additional-field-row npc-log-custom-field-row {{#if enabled}}is-enabled{{/if}}" data-custom-field>
+                    <input type="hidden" name="customFieldId" value="{{id}}">
+                    <label class="checkbox">
+                      <input type="checkbox" name="customFieldEnabled" {{checked enabled}}>
+                      <input type="text" name="customFieldLabel" value="{{label}}" placeholder="{{localize "NPCLOG.Settings.CustomFields.LabelPlaceholder"}}" maxlength="80" {{#unless enabled}}disabled{{/unless}}>
+                    </label>
+                    <input type="text" name="customFieldOptions" value="{{optionsText}}" placeholder="{{localize "NPCLOG.Settings.CustomFields.OptionsPlaceholder"}}" maxlength="240" {{#unless enabled}}disabled{{/unless}}>
+                    <button type="button" data-delete-custom-field data-tooltip="{{localize "NPCLOG.Settings.CustomFields.Delete"}}" aria-label="{{localize "NPCLOG.Settings.CustomFields.Delete"}}" {{#unless enabled}}hidden{{/unless}}>
+                      <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                {{else}}
+                  <div class="npc-log-additional-field-row {{#if isRelationship}}npc-log-additional-field-row--with-control{{/if}} {{#if enabled}}is-enabled{{/if}}" data-additional-field data-setting="{{setting}}">
+                    <label class="checkbox">
+                      <input type="checkbox" name="additionalFieldEnabled" value="{{setting}}" {{checked enabled}}>
+                      <span>{{label}}</span>
+                    </label>
+                    {{#if isRelationship}}
+                      <select id="npc-log-relationship-default" name="relationshipDefault" data-relationship-default>
+                        {{selectOptions relationshipDefaults selected=relationshipDefault valueAttr="value" labelAttr="label" localize=true}}
+                      </select>
+                    {{/if}}
+                  </div>
+                {{/if}}
+              {{/if}}
             {{/each}}
           </div>
-          <p class="notes">{{localize metaSection.hint}}</p>
+
+          <p class="notes">{{localize "NPCLOG.Settings.CustomFields.Hint"}}</p>
         </div>
       </div>
     </section>

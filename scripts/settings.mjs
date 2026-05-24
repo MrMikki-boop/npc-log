@@ -1,10 +1,12 @@
 import {
+  ACTOR_SHEET_BUTTON_STYLES,
   CARD_FRAMES,
   CARD_IMAGE_SIZES,
   CARD_STYLES,
   DUPLICATE_MODES,
   IMAGE_MODES,
   MODULE_ID,
+  RELATIONSHIP_DEFAULTS,
   SETTINGS
 } from "./constants.mjs";
 import { NpcLogSettingsApp } from "./ui/settings-app.mjs";
@@ -73,7 +75,7 @@ export function registerSettings() {
     name: "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Name",
     hint: "NPCLOG.Settings.Advanced.ShowImageSizeInAddDialog.Hint",
     scope: "world",
-    config: false,
+    config: true,
     type: Boolean,
     default: false
   });
@@ -100,7 +102,6 @@ export function registerSettings() {
     type: String,
     choices: {
       [DUPLICATE_MODES.UPDATE]: "NPCLOG.DuplicateMode.Update",
-      [DUPLICATE_MODES.SKIP]: "NPCLOG.DuplicateMode.Skip",
       [DUPLICATE_MODES.COPY]: "NPCLOG.DuplicateMode.Copy"
     },
     default: DUPLICATE_MODES.UPDATE
@@ -160,6 +161,49 @@ export function registerSettings() {
     default: true
   });
 
+  game.settings.register(MODULE_ID, SETTINGS.INCLUDE_META_SIZE, {
+    name: "NPCLOG.Settings.Advanced.MetaSize.Name",
+    hint: "NPCLOG.Settings.Advanced.MetaSize.Hint",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.INCLUDE_META_DISPOSITION, {
+    name: "NPCLOG.Settings.Advanced.MetaDisposition.Name",
+    hint: "NPCLOG.Settings.Advanced.MetaDisposition.Hint",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.RELATIONSHIP_DEFAULT, {
+    name: "NPCLOG.Settings.RelationshipDefault.Name",
+    hint: "NPCLOG.Settings.RelationshipDefault.Hint",
+    scope: "world",
+    config: false,
+    type: String,
+    choices: {
+      [RELATIONSHIP_DEFAULTS.TOKEN]: "NPCLOG.RelationshipDefault.Token",
+      [RELATIONSHIP_DEFAULTS.SECRET]: "NPCLOG.Relationship.Secret",
+      [RELATIONSHIP_DEFAULTS.NEUTRAL]: "NPCLOG.Relationship.Neutral",
+      [RELATIONSHIP_DEFAULTS.FRIENDLY]: "NPCLOG.Relationship.Friendly",
+      [RELATIONSHIP_DEFAULTS.HOSTILE]: "NPCLOG.Relationship.Hostile"
+    },
+    default: RELATIONSHIP_DEFAULTS.TOKEN
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.CUSTOM_FIELDS, {
+    name: "NPCLOG.Settings.CustomFields.Name",
+    hint: "NPCLOG.Settings.CustomFields.Hint",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: []
+  });
+
   game.settings.register(MODULE_ID, SETTINGS.AUTO_CREATE, {
     name: "NPCLOG.Settings.AutoCreate.Name",
     hint: "NPCLOG.Settings.AutoCreate.Hint",
@@ -178,6 +222,20 @@ export function registerSettings() {
     default: true
   });
 
+  game.settings.register(MODULE_ID, SETTINGS.ACTOR_SHEET_BUTTON_STYLE, {
+    name: "NPCLOG.Settings.ActorSheetButtonStyle.Name",
+    hint: "NPCLOG.Settings.ActorSheetButtonStyle.Hint",
+    scope: "client",
+    config: true,
+    type: String,
+    choices: {
+      [ACTOR_SHEET_BUTTON_STYLES.FULL]: "NPCLOG.ActorSheetButtonStyle.Full",
+      [ACTOR_SHEET_BUTTON_STYLES.ICON]: "NPCLOG.ActorSheetButtonStyle.Icon"
+    },
+    default: ACTOR_SHEET_BUTTON_STYLES.FULL,
+    requiresReload: true
+  });
+
   game.settings.register(MODULE_ID, SETTINGS.SHOW_TOKEN_CONTROL, {
     name: "NPCLOG.Settings.ShowTokenControl.Name",
     hint: "NPCLOG.Settings.ShowTokenControl.Hint",
@@ -185,7 +243,15 @@ export function registerSettings() {
     config: true,
     type: Boolean,
     default: true,
-    onChange: () => ui.controls?.render?.(true)
+    requiresReload: true
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.ADD_DIALOG_STATE, {
+    name: "NPCLOG.Settings.AddDialogState.Name",
+    scope: "client",
+    config: false,
+    type: Object,
+    default: {}
   });
 
   game.settings.register(MODULE_ID, SETTINGS.DEFAULT_MACRO_UUID, {

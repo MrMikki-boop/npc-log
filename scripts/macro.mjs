@@ -1,4 +1,4 @@
-import { IMAGE_MODES, MODULE_ID, SETTINGS } from "./constants.mjs";
+import { MODULE_ID, SETTINGS } from "./constants.mjs";
 
 const MANAGED_MACRO_FLAG = "managedDefaultMacro";
 
@@ -53,15 +53,67 @@ function isManagedDefaultMacro(macro) {
 }
 
 function getDefaultMacroCommand() {
-  return `const token = canvas.tokens?.controlled?.[0];
-if (!token?.actor) {
+  return `const entries = getTokenEntries();
+if (!entries.length) {
   ui.notifications.warn(game.i18n.localize("NPCLOG.Notifications.NoControlledToken"));
 } else {
-  await game.modules.get("${MODULE_ID}").api.addActorToNpcLog(token.actor, {
-    tokenDocument: token.document,
-    imageMode: "${IMAGE_MODES.TOKEN}",
-    replaceExisting: true
-  });
+  const api = game.modules.get("${MODULE_ID}").api;
+  api.openAddActorDialog({ entries });
+}
+
+function getTokenEntries() {
+  return dedupeTokenEntries([
+    ...(canvas.tokens?.controlled ?? []).map((token) => ({
+      actor: token.actor,
+      tokenDocument: token.document
+    })),
+    ...getOpenTokenConfigEntries()
+  ]);
+}
+
+function getOpenTokenConfigEntries() {
+  return getOpenApplications()
+    .map((app) => getTokenDocumentFromApplication(app))
+    .filter((document) => document?.actor)
+    .map((document) => ({
+      actor: document.actor,
+      tokenDocument: document
+    }));
+}
+
+function getOpenApplications() {
+  const applications = Object.values(ui.windows ?? {});
+  const instances = foundry.applications?.instances;
+  if (instances instanceof Map) applications.push(...instances.values());
+  else if (instances && typeof instances === "object") applications.push(...Object.values(instances));
+  return applications.filter((app) => app?.rendered !== false);
+}
+
+function getTokenDocumentFromApplication(app) {
+  const candidates = [
+    app?.document,
+    app?.object,
+    app?.token,
+    app?.token?.document
+  ];
+  return candidates.find((candidate) => isTokenDocument(candidate)) ?? null;
+}
+
+function isTokenDocument(value) {
+  return (globalThis.TokenDocument && value instanceof TokenDocument) || value?.documentName === "Token";
+}
+
+function dedupeTokenEntries(entries) {
+  const seen = new Set();
+  const deduped = [];
+  for (const entry of entries) {
+    if (!entry.actor) continue;
+    const key = entry.tokenDocument?.uuid ?? entry.actor.uuid;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(entry);
+  }
+  return deduped;
 }`;
 }
 

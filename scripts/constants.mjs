@@ -29,6 +29,26 @@ export const DUPLICATE_MODES = Object.freeze({
   COPY: "copy"
 });
 
+export const ACTOR_SHEET_BUTTON_STYLES = Object.freeze({
+  FULL: "full",
+  ICON: "icon"
+});
+
+export const CUSTOM_FIELD_TYPES = Object.freeze({
+  CHECKBOX: "checkbox",
+  SELECT: "select"
+});
+
+export const RELATIONSHIP_FIELD_ID = "token-disposition";
+
+export const RELATIONSHIP_DEFAULTS = Object.freeze({
+  TOKEN: "token",
+  NEUTRAL: "neutral",
+  FRIENDLY: "friendly",
+  SECRET: "secret",
+  HOSTILE: "hostile"
+});
+
 export const SETTINGS = Object.freeze({
   TARGET_JOURNAL_UUID: "targetJournalUuid",
   TARGET_PAGE_UUID: "targetPageUuid",
@@ -44,9 +64,15 @@ export const SETTINGS = Object.freeze({
   INCLUDE_META_CR: "includeMetaCr",
   INCLUDE_META_RARITY: "includeMetaRarity",
   INCLUDE_META_TRAITS: "includeMetaTraits",
+  INCLUDE_META_SIZE: "includeMetaSize",
+  INCLUDE_META_DISPOSITION: "includeMetaDisposition",
+  RELATIONSHIP_DEFAULT: "relationshipDefault",
+  CUSTOM_FIELDS: "customFields",
   AUTO_CREATE: "autoCreate",
   SHARE_WITH_PLAYERS: "shareWithPlayers",
+  ACTOR_SHEET_BUTTON_STYLE: "actorSheetButtonStyle",
   SHOW_TOKEN_CONTROL: "showTokenControl",
+  ADD_DIALOG_STATE: "addDialogState",
   DEFAULT_MACRO_UUID: "defaultMacroUuid"
 });
 
@@ -55,6 +81,8 @@ export const DEFAULT_PAGE_NAME_KEY = "NPCLOG.Defaults.PageName";
 
 export const NPC_ENTRY_CLASS = `${MODULE_ID}-npc-entry`;
 export const NPC_ENTRY_ATTRIBUTE = `data-${MODULE_ID}-actor-uuid`;
+export const NPC_ENTRY_ID_ATTRIBUTE = `data-${MODULE_ID}-entry-id`;
+export const NPC_CUSTOM_FIELD_ATTRIBUTE = `data-${MODULE_ID}-custom-field-id`;
 
 export const TEMPLATES = Object.freeze({
   ADD_ACTOR: `modules/${MODULE_ID}/templates/add-actor-app.hbs`,

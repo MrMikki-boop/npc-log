@@ -2,12 +2,15 @@ import {
   CARD_FRAMES,
   CARD_IMAGE_SIZES,
   CARD_STYLES,
+  CUSTOM_FIELD_TYPES,
   DEFAULT_JOURNAL_NAME_KEY,
   DEFAULT_PAGE_NAME_KEY,
   DUPLICATE_MODES,
   IMAGE_MODES,
   MODULE_ID,
+  NPC_CUSTOM_FIELD_ATTRIBUTE,
   NPC_ENTRY_ATTRIBUTE,
+  NPC_ENTRY_ID_ATTRIBUTE,
   NPC_ENTRY_CLASS,
   SETTINGS
 } from "./constants.mjs";
@@ -22,77 +25,111 @@ export class NpcLogManager {
   }
 
   async addActorToNpcLog(actorOrId, options = {}) {
+    const notify = options.notify !== false;
     if (!this.canManage()) {
-      return this.#fail("NPCLOG.Notifications.PermissionDenied");
+      return this.#fail("NPCLOG.Notifications.PermissionDenied", {}, { notify });
     }
 
     const actor = await this.#resolveActor(actorOrId);
-    if (!actor) return this.#fail("NPCLOG.Notifications.ActorMissing");
-
-    const imageMode = this.#normalizeImageMode(options.imageMode);
-    const image = this.#getActorImage(actor, imageMode, options);
-    if (!image.src) {
-      return this.#fail("NPCLOG.Notifications.ImageMissing", { name: actor.name });
-    }
+    if (!actor) return this.#fail("NPCLOG.Notifications.ActorMissing", {}, { notify });
 
     const target = await this.#resolveTarget(options);
     if (!target?.page) return null;
     await this.#ensurePlayerObserver(target.journal, target.page);
 
     if (!this.#canUpdatePage(target.page)) {
-      return this.#fail("NPCLOG.Notifications.PagePermissionDenied", { name: target.page.name });
+      return this.#fail("NPCLOG.Notifications.PagePermissionDenied", { name: target.page.name }, { notify });
     }
 
     const currentContent = this.#getPageContent(target.page);
-    const description = this.#normalizeDescription(options.description ?? this.getSuggestedDescription(actor));
-    const cardStyle = this.#normalizeCardStyle(options.cardStyle);
-    const cardImageSize = this.#normalizeCardImageSize(options.cardImageSize);
-    const cardFrame = this.#normalizeCardFrame(options.cardFrame);
-    const summary = this.#getActorSummary(actor);
-    const block = this.#renderNpcBlock(actor, image.src, imageMode, description, cardStyle, cardImageSize, cardFrame, summary);
-    const duplicate = this.#contentHasActor(currentContent, actor.uuid);
-    const duplicateMode = this.#normalizeDuplicateMode(options.duplicateMode, options);
-    if (duplicate && duplicateMode === DUPLICATE_MODES.SKIP) {
-      ui.notifications?.warn(game.i18n.format("NPCLOG.Notifications.Duplicate", { name: actor.name }));
-      return { actor, journal: target.journal, page: target.page, imageMode, cardStyle, duplicateMode, duplicate: true, skipped: true };
-    }
+    const prepared = this.#prepareActorEntry(actor, options, target, currentContent, { notify });
+    if (!prepared) return null;
 
-    const shouldUpdate = duplicate && duplicateMode === DUPLICATE_MODES.UPDATE;
-    const nextContent = shouldUpdate
-      ? this.#replaceActorContent(currentContent, actor.uuid, block)
-      : this.#appendContent(currentContent, block);
     await target.page.update({
-      "text.content": nextContent,
+      "text.content": prepared.nextContent,
       "text.format": HTML_FORMAT
     });
 
-    const notificationKey = shouldUpdate
+    const notificationKey = prepared.result.updated
       ? "NPCLOG.Notifications.Updated"
-      : duplicate
+      : prepared.result.duplicate
         ? "NPCLOG.Notifications.AddedCopy"
         : "NPCLOG.Notifications.Added";
-    ui.notifications?.info(game.i18n.format(notificationKey, {
+    if (notify) ui.notifications?.info(game.i18n.format(notificationKey, {
       name: actor.name,
       page: target.page.name
     }));
     if (options.openAfterSave) this.#openJournalPage(target.journal, target.page);
 
+    return prepared.result;
+  }
+
+  async addActorsToNpcLog(entries, options = {}) {
+    const notify = options.notify !== false;
+    if (!this.canManage()) {
+      return this.#fail("NPCLOG.Notifications.PermissionDenied", {}, { notify });
+    }
+
+    const actorEntries = await this.#resolveActorEntries(entries);
+    if (!actorEntries.length) return this.#fail("NPCLOG.Notifications.ActorMissing", {}, { notify });
+
+    const target = await this.#resolveTarget(options);
+    if (!target?.page) return null;
+    await this.#ensurePlayerObserver(target.journal, target.page);
+
+    if (!this.#canUpdatePage(target.page)) {
+      return this.#fail("NPCLOG.Notifications.PagePermissionDenied", { name: target.page.name }, { notify });
+    }
+
+    let nextContent = this.#getPageContent(target.page);
+    const results = [];
+    for (const entry of actorEntries) {
+      const prepared = this.#prepareActorEntry(entry.actor, {
+        ...options,
+        token: entry.token,
+        tokenDocument: entry.tokenDocument,
+        openAfterSave: false
+      }, target, nextContent, { notify: false });
+      if (!prepared) {
+        results.push({
+          actor: entry.actor,
+          journal: target.journal,
+          page: target.page,
+          failed: true,
+          skipped: true,
+          updated: false
+        });
+        continue;
+      }
+      nextContent = prepared.nextContent;
+      results.push(prepared.result);
+    }
+
+    const saved = results.filter((result) => !result.skipped && !result.failed).length;
+    if (saved) {
+      await target.page.update({
+        "text.content": nextContent,
+        "text.format": HTML_FORMAT
+      });
+    }
+
+    const skipped = results.length - saved;
+    if (notify) {
+      ui.notifications?.info(game.i18n.format("NPCLOG.Notifications.BatchSaved", {
+        saved,
+        skipped,
+        page: target.page.name
+      }));
+    }
+    if (saved && options.openAfterSave) this.#openJournalPage(target.journal, target.page);
+
     return {
-      actor,
       journal: target.journal,
       page: target.page,
-      imageMode,
-      cardStyle,
-      cardImageSize,
-      cardFrame,
-      duplicateMode,
-      image: image.src,
-      description,
-      summary,
-      duplicate,
-      opened: Boolean(options.openAfterSave),
-      skipped: false,
-      updated: shouldUpdate
+      results,
+      saved,
+      skipped,
+      opened: Boolean(saved && options.openAfterSave)
     };
   }
 
@@ -156,17 +193,24 @@ export class NpcLogManager {
     return this.#truncateDescription(combined);
   }
 
+  getActorCustomFields(actor, page) {
+    if (!(actor instanceof Actor) || !page) return [];
+    return this.#getActorCustomFieldsFromContent(this.#getPageContent(page), actor.uuid);
+  }
+
   async #resolveTarget(options) {
+    const notify = options.notify !== false;
+    const createPage = options.createPage === true;
     let journal = await this.#resolveJournal(options.journal ?? options.journalUuid ?? game.settings.get(MODULE_ID, SETTINGS.TARGET_JOURNAL_UUID));
-    let page = await this.#resolvePage(options.page ?? options.pageUuid ?? game.settings.get(MODULE_ID, SETTINGS.TARGET_PAGE_UUID), journal);
+    let page = createPage ? null : await this.#resolvePage(options.page ?? options.pageUuid ?? game.settings.get(MODULE_ID, SETTINGS.TARGET_PAGE_UUID), journal);
     if (!journal && page?.parent instanceof JournalEntry) journal = page.parent;
     if (journal && page?.parent?.uuid !== journal.uuid) page = null;
 
     if (journal && page) return { journal, page };
 
     const autoCreate = options.autoCreate ?? game.settings.get(MODULE_ID, SETTINGS.AUTO_CREATE);
-    if (!autoCreate) {
-      return this.#fail("NPCLOG.Notifications.TargetMissing");
+    if (!journal && !autoCreate) {
+      return this.#fail("NPCLOG.Notifications.TargetMissing", {}, { notify });
     }
 
     if (!journal) {
@@ -176,6 +220,18 @@ export class NpcLogManager {
         pages: []
       });
       if (journal) await game.settings.set(MODULE_ID, SETTINGS.TARGET_JOURNAL_UUID, journal.uuid);
+    }
+
+    if (createPage) {
+      const pageName = this.#normalizePageName(options.pageName);
+      if (!pageName) return this.#fail("NPCLOG.Notifications.PageNameMissing", {}, { notify });
+      page = await this.#createPage(journal, pageName);
+      await game.settings.set(MODULE_ID, SETTINGS.TARGET_PAGE_UUID, page.uuid);
+      return { journal, page };
+    }
+
+    if (!autoCreate) {
+      return this.#fail("NPCLOG.Notifications.TargetMissing", {}, { notify });
     }
 
     page = await this.#getOrCreatePage(journal);
@@ -189,8 +245,12 @@ export class NpcLogManager {
       ?? journal.pages.find((page) => page.type === TEXT_PAGE_TYPE);
     if (existing) return existing;
 
+    return this.#createPage(journal, game.i18n.localize(DEFAULT_PAGE_NAME_KEY));
+  }
+
+  async #createPage(journal, name) {
     const [page] = await journal.createEmbeddedDocuments("JournalEntryPage", [{
-      name: game.i18n.localize(DEFAULT_PAGE_NAME_KEY),
+      name,
       type: TEXT_PAGE_TYPE,
       text: {
         format: HTML_FORMAT,
@@ -198,6 +258,10 @@ export class NpcLogManager {
       }
     }]);
     return page;
+  }
+
+  #normalizePageName(value) {
+    return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
   }
 
   #getDefaultOwnershipCreateData() {
@@ -233,6 +297,23 @@ export class NpcLogManager {
     if (typeof actorOrId !== "string") return null;
     const actor = game.actors?.get(actorOrId) ?? await this.#safeFromUuid(actorOrId);
     return actor instanceof Actor ? actor : null;
+  }
+
+  async #resolveActorEntries(entries) {
+    const candidates = Array.isArray(entries) ? entries : [entries];
+    const resolved = [];
+    const seen = new Set();
+    for (const candidate of candidates) {
+      const actor = await this.#resolveActor(candidate?.actor ?? candidate);
+      if (!actor) continue;
+      const token = candidate?.token ?? null;
+      const tokenDocument = candidate?.tokenDocument ?? token?.document ?? null;
+      const key = tokenDocument?.uuid ?? actor.uuid;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      resolved.push({ actor, token, tokenDocument });
+    }
+    return resolved;
   }
 
   async #resolveJournal(value) {
@@ -303,7 +384,7 @@ export class NpcLogManager {
     if (Object.values(DUPLICATE_MODES).includes(value)) return value;
     if (!game.settings.get(MODULE_ID, SETTINGS.ADVANCED_SETTINGS_ENABLED)) return DUPLICATE_MODES.UPDATE;
     const configured = game.settings.get(MODULE_ID, SETTINGS.DUPLICATE_MODE);
-    return Object.values(DUPLICATE_MODES).includes(configured) ? configured : DUPLICATE_MODES.UPDATE;
+    return [DUPLICATE_MODES.UPDATE, DUPLICATE_MODES.COPY].includes(configured) ? configured : DUPLICATE_MODES.UPDATE;
   }
 
   #getActorImage(actor, imageMode, options) {
@@ -324,7 +405,8 @@ export class NpcLogManager {
       this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_LEVEL) ? this.#getActorLevelLabel(actor) : "",
       this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_CR) ? this.#getActorChallengeLabel(system) : "",
       this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_RARITY) ? this.#getActorRarityLabel(system) : "",
-      this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_TRAITS) ? this.#getActorTraitLabel(actor) : ""
+      this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_TRAITS) ? this.#getActorTraitLabel(actor) : "",
+      this.#isMetaFieldEnabled(SETTINGS.INCLUDE_META_SIZE) ? this.#getActorSizeLabel(system) : ""
     ].filter(Boolean);
     return Array.from(new Set(parts)).slice(0, 4);
   }
@@ -337,12 +419,12 @@ export class NpcLogManager {
   #getSystemMetaSettings() {
     const systemId = game.system?.id ?? "";
     if (systemId === "dnd5e") {
-      return [SETTINGS.INCLUDE_META_TYPE, SETTINGS.INCLUDE_META_LEVEL, SETTINGS.INCLUDE_META_CR];
+      return [SETTINGS.INCLUDE_META_TYPE, SETTINGS.INCLUDE_META_LEVEL, SETTINGS.INCLUDE_META_CR, SETTINGS.INCLUDE_META_SIZE];
     }
     if (systemId === "pf2e") {
-      return [SETTINGS.INCLUDE_META_LEVEL, SETTINGS.INCLUDE_META_RARITY, SETTINGS.INCLUDE_META_TRAITS];
+      return [SETTINGS.INCLUDE_META_LEVEL, SETTINGS.INCLUDE_META_RARITY, SETTINGS.INCLUDE_META_TRAITS, SETTINGS.INCLUDE_META_SIZE];
     }
-    return [SETTINGS.INCLUDE_META_TYPE, SETTINGS.INCLUDE_META_LEVEL];
+    return [SETTINGS.INCLUDE_META_TYPE, SETTINGS.INCLUDE_META_LEVEL, SETTINGS.INCLUDE_META_SIZE];
   }
 
   #getActorTypeLabel(actor) {
@@ -352,6 +434,16 @@ export class NpcLogManager {
       ?? this.#localizeMaybe(detailsType?.custom)
       ?? this.#localizeConfigLabel(detailsType?.value, globalThis.CONFIG?.DND5E?.creatureTypes);
     if (dndType) return dndType;
+
+    const ancestry = system.details?.race
+      ?? system.details?.species
+      ?? system.details?.ancestry
+      ?? system.traits?.ancestry;
+    const ancestryLabel = this.#localizeMaybe(ancestry?.label)
+      ?? this.#localizeMaybe(ancestry?.name)
+      ?? this.#localizeMaybe(ancestry?.value)
+      ?? this.#localizeMaybe(ancestry);
+    if (ancestryLabel) return ancestryLabel;
 
     return this.#humanizeSlug(actor?.type);
   }
@@ -372,6 +464,18 @@ export class NpcLogManager {
       ?? actor?.level;
     if (!Number.isFinite(Number(level)) || Number(level) <= 0) return "";
     return game.i18n.format("NPCLOG.ActorMeta.Level", { level: Number(level) });
+  }
+
+  #getActorSizeLabel(system) {
+    const size = system.traits?.size
+      ?? system.details?.size
+      ?? system.size;
+    const label = this.#localizeConfigLabel(size, globalThis.CONFIG?.DND5E?.actorSizes)
+      ?? this.#localizeConfigLabel(size, globalThis.CONFIG?.DND5E?.tokenSizes)
+      ?? this.#localizeConfigLabel(size, globalThis.CONFIG?.PF2E?.actorSizes)
+      ?? this.#localizeMaybe(size)
+      ?? this.#humanizeSlug(size);
+    return label ? game.i18n.format("NPCLOG.ActorMeta.Size", { size: label }) : "";
   }
 
   #getActorChallengeLabel(system) {
@@ -395,15 +499,173 @@ export class NpcLogManager {
   }
 
   #contentHasActor(content, actorUuid) {
-    const document = new DOMParser().parseFromString(`<main>${content}</main>`, "text/html");
-    return Array.from(document.querySelectorAll(`[${NPC_ENTRY_ATTRIBUTE}]`))
-      .some((entry) => entry.getAttribute(NPC_ENTRY_ATTRIBUTE) === actorUuid);
+    return Boolean(this.#findActorEntryElement(content, actorUuid));
   }
 
-  #replaceActorContent(content, actorUuid, block) {
+  #getActorDescriptionFromContent(content, actorUuid) {
+    return this.#getActorDescriptionFromEntry(this.#findActorEntryElement(content, actorUuid));
+  }
+
+  #getActorDescriptionFromEntry(entry) {
+    const description = entry?.querySelector?.(`.${MODULE_ID}-npc-entry__description`);
+    if (!description || description.classList.contains(`${MODULE_ID}-npc-entry__description--empty`)) return null;
+    const text = description.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    return text || null;
+  }
+
+  #getActorCustomFieldsFromContent(content, actorUuid) {
+    return this.#getActorCustomFieldsFromEntry(this.#findActorEntryElement(content, actorUuid));
+  }
+
+  #getActorCustomFieldsFromEntry(entry) {
+    if (!entry) return [];
+
+    return Array.from(entry.querySelectorAll(`[${NPC_CUSTOM_FIELD_ATTRIBUTE}]`))
+      .map((element) => ({
+        id: element.getAttribute(NPC_CUSTOM_FIELD_ATTRIBUTE),
+        label: element.dataset.label ?? "",
+        type: element.dataset.type ?? CUSTOM_FIELD_TYPES.CHECKBOX,
+        value: element.dataset.value ?? "true",
+        path: element.dataset.path ?? ""
+      }))
+      .filter((field) => field.id && field.label);
+  }
+
+  #prepareActorEntry(actor, options, target, currentContent, { notify = true } = {}) {
+    const imageMode = this.#normalizeImageMode(options.imageMode);
+    const image = this.#getActorImage(actor, imageMode, options);
+    if (!image.src) {
+      return this.#fail("NPCLOG.Notifications.ImageMissing", { name: actor.name }, { notify });
+    }
+
+    const existingEntry = this.#findActorEntryElement(currentContent, actor.uuid);
+    const duplicate = Boolean(existingEntry);
+    const duplicateMode = this.#normalizeDuplicateMode(options.duplicateMode, options);
+    const cardStyle = this.#normalizeCardStyle(options.cardStyle);
+    const cardImageSize = this.#normalizeCardImageSize(options.cardImageSize);
+    const cardFrame = this.#normalizeCardFrame(options.cardFrame);
+    const resultBase = {
+      actor,
+      journal: target.journal,
+      page: target.page,
+      imageMode,
+      cardStyle,
+      cardImageSize,
+      cardFrame,
+      duplicateMode,
+      duplicate
+    };
+
+    if (duplicate && duplicateMode === DUPLICATE_MODES.SKIP) {
+      if (notify) ui.notifications?.warn(game.i18n.format("NPCLOG.Notifications.Duplicate", { name: actor.name }));
+      return {
+        nextContent: currentContent,
+        result: {
+          ...resultBase,
+          skipped: true,
+          updated: false
+        }
+      };
+    }
+
+    const shouldUpdate = duplicate && duplicateMode === DUPLICATE_MODES.UPDATE;
+    const entryId = shouldUpdate
+      ? this.#getEntryId(existingEntry, actor.uuid)
+      : duplicate
+        ? this.#createEntryId(actor.uuid)
+        : actor.uuid;
+    const existingDescription = duplicate ? this.#getActorDescriptionFromEntry(existingEntry) : null;
+    const description = this.#normalizeDescription(options.description ?? existingDescription ?? this.getSuggestedDescription(actor));
+    const summary = this.#getActorSummary(actor);
+    const existingCustomFields = duplicate ? this.#getActorCustomFieldsFromEntry(existingEntry) : [];
+    const customFieldInput = typeof options.customFields === "function"
+      ? options.customFields(actor, options)
+      : options.customFields;
+    const customFields = this.#normalizeCustomFields(customFieldInput, existingCustomFields, options.customFieldDefinitionIds, actor);
+    const block = this.#renderNpcBlock(actor, image.src, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields, entryId);
+    const nextContent = shouldUpdate
+      ? this.#replaceActorContent(currentContent, actor.uuid, block, entryId)
+      : this.#appendContent(currentContent, block);
+
+    return {
+      nextContent,
+      result: {
+        ...resultBase,
+        entryId,
+        image: image.src,
+        description,
+        summary,
+        customFields,
+        opened: Boolean(options.openAfterSave),
+        skipped: false,
+        updated: shouldUpdate
+      }
+    };
+  }
+
+  #findActorEntryElement(content, actorUuid, entryId = actorUuid) {
     const document = new DOMParser().parseFromString(`<main>${content}</main>`, "text/html");
-    const entry = Array.from(document.querySelectorAll(`[${NPC_ENTRY_ATTRIBUTE}]`))
-      .find((element) => element.getAttribute(NPC_ENTRY_ATTRIBUTE) === actorUuid);
+    return this.#findActorEntryInDocument(document, actorUuid, entryId);
+  }
+
+  #findActorEntryInDocument(document, actorUuid, entryId = actorUuid) {
+    const entries = Array.from(document.querySelectorAll(`[${NPC_ENTRY_ATTRIBUTE}]`))
+      .filter((entry) => entry.getAttribute(NPC_ENTRY_ATTRIBUTE) === actorUuid);
+    return entries.find((entry) => entry.getAttribute(NPC_ENTRY_ID_ATTRIBUTE) === entryId)
+      ?? entries.find((entry) => !entry.hasAttribute(NPC_ENTRY_ID_ATTRIBUTE))
+      ?? entries[0]
+      ?? null;
+  }
+
+  #getEntryId(entry, fallback) {
+    return entry?.getAttribute?.(NPC_ENTRY_ID_ATTRIBUTE) || fallback;
+  }
+
+  #createEntryId(actorUuid) {
+    const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return `${actorUuid}:${suffix}`;
+  }
+
+  #normalizeCustomFields(fields, existingFields = [], definitionIds = [], actor = null) {
+    if (fields === undefined) return existingFields;
+
+    const activeIds = new Set(Array.isArray(definitionIds) ? definitionIds.map(String) : []);
+    const normalized = Array.isArray(fields)
+      ? fields.map((field) => this.#normalizeCustomField(field, actor)).filter(Boolean)
+      : [];
+    const normalizedIds = new Set(normalized.map((field) => field.id));
+    const preservedOrphans = existingFields
+      .map((field) => this.#normalizeCustomField(field, actor))
+      .filter((field) => field && !activeIds.has(field.id) && !normalizedIds.has(field.id));
+    return [...normalized, ...preservedOrphans];
+  }
+
+  #normalizeCustomField(field, actor = null) {
+    const id = String(field?.id ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+    const label = String(field?.label ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const type = Object.values(CUSTOM_FIELD_TYPES).includes(field?.type) ? field.type : CUSTOM_FIELD_TYPES.CHECKBOX;
+    const path = String(field?.path ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
+    const value = this.#normalizeCustomFieldValue(field?.value);
+    if (!id || !label) return null;
+    if (type === CUSTOM_FIELD_TYPES.CHECKBOX) return { id, label, type, value: "true" };
+    if (!value) return null;
+    return { id, label, type, value, path };
+  }
+
+  #normalizeCustomFieldValue(value) {
+    if (value === null || value === undefined || value === "") return "";
+    if (Array.isArray(value)) return value.map((entry) => this.#normalizeCustomFieldValue(entry)).filter(Boolean).join(", ");
+    if (typeof value === "object") {
+      if ("label" in value) return this.#normalizeCustomFieldValue(value.label);
+      if ("value" in value) return this.#normalizeCustomFieldValue(value.value);
+      return "";
+    }
+    return String(value).replace(/\s+/g, " ").trim().slice(0, 160);
+  }
+
+  #replaceActorContent(content, actorUuid, block, entryId = actorUuid) {
+    const document = new DOMParser().parseFromString(`<main>${content}</main>`, "text/html");
+    const entry = this.#findActorEntryInDocument(document, actorUuid, entryId);
     if (!entry) return this.#appendContent(content, block);
 
     const replacement = new DOMParser().parseFromString(block, "text/html").body.firstElementChild;
@@ -412,13 +674,14 @@ export class NpcLogManager {
     return document.body.firstElementChild?.innerHTML ?? content;
   }
 
-  #renderNpcBlock(actor, imageSrc, imageMode, description, cardStyle, cardImageSize, cardFrame, summary) {
+  #renderNpcBlock(actor, imageSrc, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields = [], entryId = actor.uuid) {
     const escape = foundry.utils.escapeHTML;
     const descriptionHtml = description
       ? `<p class="${MODULE_ID}-npc-entry__description">${escape(description)}</p>`
       : `<p class="${MODULE_ID}-npc-entry__description ${MODULE_ID}-npc-entry__description--empty">${escape(game.i18n.localize("NPCLOG.Journal.NoDescription"))}</p>`;
-    const summaryHtml = summary.length
-      ? `<ul class="${MODULE_ID}-npc-entry__meta">${summary.map((part) => `<li>${escape(part)}</li>`).join("")}</ul>`
+    const metaHtml = this.#renderMetaList(summary, customFields);
+    const summaryHtml = metaHtml
+      ? `<ul class="${MODULE_ID}-npc-entry__meta">${metaHtml}</ul>`
       : "";
     const classes = [
       NPC_ENTRY_CLASS,
@@ -427,15 +690,53 @@ export class NpcLogManager {
       `${NPC_ENTRY_CLASS}--frame-${cardFrame}`
     ].join(" ");
     return [
-      `<section class="${classes}" ${NPC_ENTRY_ATTRIBUTE}="${escape(actor.uuid)}" data-image-mode="${escape(imageMode)}" data-card-style="${escape(cardStyle)}" data-image-size="${escape(cardImageSize)}" data-card-frame="${escape(cardFrame)}">`,
+      `<section class="${classes}" ${NPC_ENTRY_ATTRIBUTE}="${escape(actor.uuid)}" ${NPC_ENTRY_ID_ATTRIBUTE}="${escape(entryId)}" data-image-mode="${escape(imageMode)}" data-card-style="${escape(cardStyle)}" data-image-size="${escape(cardImageSize)}" data-card-frame="${escape(cardFrame)}">`,
       `<img class="${MODULE_ID}-npc-entry__image" src="${escape(imageSrc)}" alt="${escape(actor.name)}" loading="lazy">`,
       `<div class="${MODULE_ID}-npc-entry__body">`,
-      `<h3 class="${MODULE_ID}-npc-entry__name">${escape(actor.name)}</h3>`,
+      `<h3 class="${MODULE_ID}-npc-entry__name">${this.#renderActorLink(actor)}</h3>`,
       summaryHtml,
       descriptionHtml,
       "</div>",
       "</section>"
     ].join("");
+  }
+
+  #renderMetaList(summary, customFields) {
+    const escape = foundry.utils.escapeHTML;
+    const systemItems = summary.map((part) => `<li>${escape(part)}</li>`);
+    const customItems = customFields.map((field) => {
+      const hasValue = field.type !== CUSTOM_FIELD_TYPES.CHECKBOX && field.value && field.value !== "true";
+      const content = hasValue
+        ? `<strong>${escape(field.label)}:</strong> ${escape(field.value)}`
+        : `<strong>${escape(field.label)}</strong>`;
+      return [
+        `<li ${NPC_CUSTOM_FIELD_ATTRIBUTE}="${escape(field.id)}"`,
+        ` data-label="${escape(field.label)}"`,
+        ` data-type="${escape(field.type)}"`,
+        field.path ? ` data-path="${escape(field.path)}"` : "",
+        ` data-value="${escape(hasValue ? field.value : "true")}">`,
+        content,
+        "</li>"
+      ].join("");
+    });
+    return [...systemItems, ...customItems].join("");
+  }
+
+  #renderActorLink(actor) {
+    const escape = foundry.utils.escapeHTML;
+    const label = this.#getActorDisplayName(actor);
+    return [
+      `<a class="content-link ${MODULE_ID}-npc-entry__actor-link" draggable="true" data-link data-uuid="${escape(actor.uuid)}" data-id="${escape(actor.id)}" data-type="Actor" title="${escape(actor.name)}">`,
+      `<i class="fas fa-user" inert></i>`,
+      escape(label),
+      "</a>"
+    ].join("");
+  }
+
+  #getActorDisplayName(actor) {
+    const name = actor?.name ?? "";
+    const [localized] = name.split(/\s+\/\s+/);
+    return localized?.trim() || name;
   }
 
   #normalizeDescription(value) {
@@ -489,8 +790,8 @@ export class NpcLogManager {
     return content ? `${content}\n${block}` : block;
   }
 
-  #fail(key, data = {}) {
-    ui.notifications?.warn(game.i18n.format(key, data));
+  #fail(key, data = {}, { notify = true } = {}) {
+    if (notify) ui.notifications?.warn(game.i18n.format(key, data));
     return null;
   }
 }
