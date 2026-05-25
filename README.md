@@ -12,7 +12,7 @@ The module is system-agnostic by default and includes small integrations for com
 - Review grouped batch selections before saving.
 - Choose portrait art or token art.
 - Add or edit a short description before saving.
-- Add reusable additional fields per card, including system fields, token relationship, custom labels, and custom dropdowns.
+- Add reusable additional fields per card, including system fields, token relationship, custom labels, actor-data paths, and custom dropdowns.
 - Append cards to a configured JournalEntryPage without replacing unrelated page content.
 - Create a new journal page directly from the add dialog.
 - Link each card name back to its source Actor, with long bilingual names shortened before ` / ` on the card.
@@ -47,6 +47,8 @@ NPC Log uses two layers of settings:
 
 Advanced settings are hidden behind a single checkbox so the basic workflow stays compact.
 
+Custom field paths are resolved against `actor.system` first, so `details.race` works for `actor.system.details.race`. Prefixes like `system.details.race`, `actor.name`, `npc.bio.exp`, or `character.race` are also accepted where the underlying system data exists.
+
 ## Public API
 
 Macros and other modules can use the public API:
@@ -78,7 +80,8 @@ Useful `addActorToNpcLog` options:
 - `createPage`: create a new text page in the selected journal.
 - `pageName`: name used with `createPage`.
 - `description`: override the suggested description.
-- `customFields`: custom metadata fields to render on the card. Checkbox fields render as labels; select fields can render as `Label: value`.
+- `includeDescription`: set to `false` to save the card without a description block.
+- `customFields`: custom metadata fields to render on the card. Checkbox fields render as labels; text/path and select fields render as `Label: value`.
 - `customFieldDefinitionIds`: fields currently defined in settings, used to remove unchecked fields during single-card updates.
 - `replaceExisting`: update an existing card for the same actor.
 - `preventDuplicates`: skip adding when the actor already exists.
@@ -120,6 +123,17 @@ When **Share NPC journal with players** is enabled, the module sets the target j
 ## Development Notes
 
 The implementation avoids libWrapper and other runtime dependencies. It uses Foundry hooks, ApplicationV2, Handlebars templates, DOM APIs, scoped CSS, and a small public API. See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation notes.
+
+## Development Smoke Check
+
+Before release, run a quick in-Foundry smoke pass:
+
+1. Create or pick three actors with different names and images.
+2. Select their tokens and open the bundled **Add Selected Token(s) to Journal** macro.
+3. Save them once with **Gallery** and description disabled, then confirm the journal page updates once with a single summary notification.
+4. Add one actor again with duplicate handling set to update, then add it again as a copy.
+5. Add custom fields covering a simple label, a path such as `details.race`, and a comma-separated dropdown.
+6. Confirm old cards still update without losing their description or saved custom fields.
 
 ## Release
 

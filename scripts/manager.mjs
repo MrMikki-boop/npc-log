@@ -574,15 +574,18 @@ export class NpcLogManager {
       : duplicate
         ? this.#createEntryId(actor.uuid)
         : actor.uuid;
-    const existingDescription = duplicate ? this.#getActorDescriptionFromEntry(existingEntry) : null;
-    const description = this.#normalizeDescription(options.description ?? existingDescription ?? this.getSuggestedDescription(actor));
+    const includeDescription = options.includeDescription !== false;
+    const existingDescription = includeDescription && duplicate ? this.#getActorDescriptionFromEntry(existingEntry) : null;
+    const description = includeDescription
+      ? this.#normalizeDescription(options.description ?? existingDescription ?? this.getSuggestedDescription(actor))
+      : "";
     const summary = this.#getActorSummary(actor);
     const existingCustomFields = duplicate ? this.#getActorCustomFieldsFromEntry(existingEntry) : [];
     const customFieldInput = typeof options.customFields === "function"
       ? options.customFields(actor, options)
       : options.customFields;
     const customFields = this.#normalizeCustomFields(customFieldInput, existingCustomFields, options.customFieldDefinitionIds, actor);
-    const block = this.#renderNpcBlock(actor, image.src, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields, entryId);
+    const block = this.#renderNpcBlock(actor, image.src, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields, entryId, { includeDescription });
     const nextContent = shouldUpdate
       ? this.#replaceActorContent(currentContent, actor.uuid, block, entryId)
       : this.#appendContent(currentContent, block);
@@ -660,7 +663,7 @@ export class NpcLogManager {
       if ("value" in value) return this.#normalizeCustomFieldValue(value.value);
       return "";
     }
-    return String(value).replace(/\s+/g, " ").trim().slice(0, 160);
+    return this.#htmlToText(value).slice(0, 160);
   }
 
   #replaceActorContent(content, actorUuid, block, entryId = actorUuid) {
@@ -674,11 +677,13 @@ export class NpcLogManager {
     return document.body.firstElementChild?.innerHTML ?? content;
   }
 
-  #renderNpcBlock(actor, imageSrc, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields = [], entryId = actor.uuid) {
+  #renderNpcBlock(actor, imageSrc, imageMode, description, cardStyle, cardImageSize, cardFrame, summary, customFields = [], entryId = actor.uuid, { includeDescription = true } = {}) {
     const escape = foundry.utils.escapeHTML;
-    const descriptionHtml = description
-      ? `<p class="${MODULE_ID}-npc-entry__description">${escape(description)}</p>`
-      : `<p class="${MODULE_ID}-npc-entry__description ${MODULE_ID}-npc-entry__description--empty">${escape(game.i18n.localize("NPCLOG.Journal.NoDescription"))}</p>`;
+    const descriptionHtml = includeDescription
+      ? description
+        ? `<p class="${MODULE_ID}-npc-entry__description">${escape(description)}</p>`
+        : `<p class="${MODULE_ID}-npc-entry__description ${MODULE_ID}-npc-entry__description--empty">${escape(game.i18n.localize("NPCLOG.Journal.NoDescription"))}</p>`
+      : "";
     const metaHtml = this.#renderMetaList(summary, customFields);
     const summaryHtml = metaHtml
       ? `<ul class="${MODULE_ID}-npc-entry__meta">${metaHtml}</ul>`

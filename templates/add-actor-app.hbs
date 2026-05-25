@@ -129,7 +129,7 @@
           <h3>{{localize "NPCLOG.AddActor.CustomFieldsSection"}}</h3>
         </div>
 
-        <p class="notes">{{localize "NPCLOG.AddActor.CustomFieldsHint"}}</p>
+        <p class="notes">{{customFieldsHint}}</p>
 
         <div class="npc-log-add-custom-fields">
           {{#each customFields}}
@@ -154,9 +154,17 @@
     {{/if}}
 
     {{#if isMultiple}}
+      <div class="form-group npc-log-checkbox-row">
+        <label for="npc-log-include-description">{{localize "NPCLOG.AddActor.IncludeDescription"}}</label>
+        <input id="npc-log-include-description" type="checkbox" name="includeDescription" {{#if includeDescription}}checked{{/if}}>
+      </div>
       <p class="notes">{{localize "NPCLOG.AddActor.MultipleDescriptionHint"}}</p>
     {{else}}
       <div class="form-group stacked">
+        <div class="npc-log-inline-checkbox">
+          <label for="npc-log-include-description">{{localize "NPCLOG.AddActor.IncludeDescription"}}</label>
+          <input id="npc-log-include-description" type="checkbox" name="includeDescription" {{#if includeDescription}}checked{{/if}}>
+        </div>
         <label for="npc-log-description">{{localize "NPCLOG.AddActor.Description"}}</label>
         <textarea id="npc-log-description" name="description" rows="4">{{description}}</textarea>
         <p class="notes">{{localize "NPCLOG.AddActor.DescriptionHint"}}</p>

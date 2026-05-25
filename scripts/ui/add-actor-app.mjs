@@ -58,7 +58,7 @@ export class AddActorToNpcLogApp extends HandlebarsApplicationMixin(ApplicationV
     const configuredTarget = await this.manager.getConfiguredTarget();
     const imageSources = this.manager.getActorImageSources(this.actor, { tokenDocument: this.tokenDocument });
     const imageMode = this.formState.imageMode ?? game.settings.get(MODULE_ID, SETTINGS.IMAGE_MODE);
-    const cardStyle = this.formState.cardStyle ?? game.settings.get(MODULE_ID, SETTINGS.CARD_STYLE);
+    const cardStyle = normalizeChoice(this.formState.cardStyle ?? game.settings.get(MODULE_ID, SETTINGS.CARD_STYLE), CARD_STYLES, CARD_STYLES.PORTRAIT);
     const cardImageSize = this.formState.cardImageSize ?? game.settings.get(MODULE_ID, SETTINGS.CARD_IMAGE_SIZE);
     const savedState = getSavedAddDialogState();
     const openAfterSave = Object.prototype.hasOwnProperty.call(this.formState, "openAfterSave")
@@ -121,6 +121,9 @@ export class AddActorToNpcLogApp extends HandlebarsApplicationMixin(ApplicationV
         { value: CARD_IMAGE_SIZES.LARGE, label: "NPCLOG.CardImageSize.Large" }
       ],
       showImageSizeInAddDialog: game.settings.get(MODULE_ID, SETTINGS.SHOW_IMAGE_SIZE_IN_ADD_DIALOG),
+      includeDescription: Object.prototype.hasOwnProperty.call(this.formState, "includeDescription")
+        ? this.formState.includeDescription
+        : getPersistentFieldValues(savedState.fields, "includeDescription").length > 0 || !Object.prototype.hasOwnProperty.call(savedState.fields, "includeDescription"),
       openAfterSave,
       imageSources,
       selectedImage,
@@ -138,6 +141,9 @@ export class AddActorToNpcLogApp extends HandlebarsApplicationMixin(ApplicationV
       },
       customFields,
       hasCustomFields: customFields.length > 0,
+      customFieldsHint: game.i18n.localize(this.entries.length > 1
+        ? "NPCLOG.AddActor.CustomFieldsBatchHint"
+        : "NPCLOG.AddActor.CustomFieldsHint"),
       journals,
       pages: getPageChoices(selectedJournal)
     };
@@ -197,6 +203,14 @@ export class AddActorToNpcLogApp extends HandlebarsApplicationMixin(ApplicationV
       row?.classList.toggle("is-enabled", event.target.checked);
       for (const input of row?.querySelectorAll("[data-custom-field-value]") ?? []) input.disabled = !event.target.checked;
     });
+
+    const includeDescription = this.element.querySelector('[name="includeDescription"]');
+    const description = this.element.querySelector('[name="description"]');
+    const toggleDescription = () => {
+      if (description) description.disabled = includeDescription?.checked === false;
+    };
+    includeDescription?.addEventListener("change", toggleDescription);
+    toggleDescription();
   }
 
   static async #onAdd(event, target) {
@@ -235,6 +249,7 @@ export class AddActorToNpcLogApp extends HandlebarsApplicationMixin(ApplicationV
       createPage,
       pageName,
       customFieldDefinitionIds,
+      includeDescription: formData.has("includeDescription"),
       openAfterSave: formData.has("openAfterSave")
     };
     let currentJournalUuid = journalUuid;
@@ -371,9 +386,14 @@ function normalizeCustomFieldDefinitions(value) {
     .map((field) => {
       const id = String(field?.id ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
       const label = String(field?.label ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+      const path = normalizeCustomFieldPath(field?.path);
       const options = normalizeCustomFieldOptions(field?.options);
-      const type = options.length ? CUSTOM_FIELD_TYPES.SELECT : CUSTOM_FIELD_TYPES.CHECKBOX;
-      return { id, label, type, options };
+      const type = options.length
+        ? CUSTOM_FIELD_TYPES.SELECT
+        : path
+          ? CUSTOM_FIELD_TYPES.TEXT
+          : CUSTOM_FIELD_TYPES.CHECKBOX;
+      return { id, label, path, type, options };
     })
     .filter((field) => {
       if (!field.id || !field.label || seen.has(field.id)) return false;
@@ -389,24 +409,29 @@ function getCustomFieldControls(definitions, existingFields, actor, isMultiple, 
   return definitions.map((field) => {
     const current = existing.get(field.id);
     const isSelect = field.type === CUSTOM_FIELD_TYPES.SELECT;
+    const isText = field.type === CUSTOM_FIELD_TYPES.TEXT;
     const isRelationship = field.id === RELATIONSHIP_FIELD_ID;
-    const persistedValue = getPersistentFieldValue(persistedFields, getCustomFieldValueName(field.id));
-    const selectOptions = isSelect ? getSelectOptions(field.options, current?.value, isRelationship && isMultiple) : field.options;
+    const actorValue = getActorPathValue(actor, field.path);
+    const persistedValue = field.path ? undefined : getPersistentFieldValue(persistedFields, getCustomFieldValueName(field.id));
+    const selectOptions = isSelect ? getSelectOptions(field.options, current?.value ?? actorValue, isRelationship && isMultiple) : field.options;
     const value = isSelect
-      ? getInitialSelectValue(field, current, actor, isMultiple, selectOptions, tokenDocument, persistedValue)
+      ? getInitialSelectValue(field, current, actor, isMultiple, selectOptions, tokenDocument, persistedValue, actorValue)
+      : isText
+        ? getInitialTextValue(current, persistedValue, actorValue)
         : "";
     const enabled = hasPersistedCustomSelection
       ? persistedEnabled.has(field.id)
       : isRelationship
         ? true
-        : Boolean(current);
+        : Boolean(current || actorValue);
     return {
       ...field,
       enabled,
       value,
       valueName: getCustomFieldValueName(field.id),
       isSelect,
-      hasValueControl: isSelect,
+      isText,
+      hasValueControl: isSelect || isText,
       options: selectOptions.map((option) => ({
         value: option.value ?? option,
         label: option.label ?? option,
@@ -427,7 +452,11 @@ function readSelectedCustomFields(form, definitions, actor, tokenDocument = null
         const value = field.id === RELATIONSHIP_FIELD_ID && formValue === TOKEN_RELATIONSHIP_VALUE
           ? getTokenRelationshipValue(actor, tokenDocument)
           : normalizeSelectValue(formValue, getSelectOptions(field.options, formValue));
-        return value ? { id: field.id, label: field.label, type: field.type, value } : null;
+        return value ? { id: field.id, label: field.label, type: field.type, value, path: field.path } : null;
+      }
+      if (field.type === CUSTOM_FIELD_TYPES.TEXT) {
+        const value = formValue || getActorPathValue(actor, field.path);
+        return value ? { id: field.id, label: field.label, type: field.type, value, path: field.path } : null;
       }
       return {
         id: field.id,
@@ -449,6 +478,13 @@ function normalizeCustomFieldOptions(value) {
     .map((option) => String(option ?? "").trim())
     .filter(Boolean)))
     .slice(0, 24);
+}
+
+function normalizeCustomFieldPath(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 240);
 }
 
 function getRelationshipFieldDefinition() {
@@ -484,15 +520,67 @@ function getSelectOptions(options, currentValue, includeTokenOption = false) {
   return values;
 }
 
-function getInitialSelectValue(field, current, actor, isMultiple, options, tokenDocument = null, persistedValue = undefined) {
+function getInitialSelectValue(field, current, actor, isMultiple, options, tokenDocument = null, persistedValue = undefined, actorValue = "") {
   if (persistedValue !== undefined) return normalizeSelectValue(persistedValue, options);
   if (current?.value) return normalizeSelectValue(current.value, options);
+  if (actorValue) return normalizeSelectValue(actorValue, options);
   if (field.id !== RELATIONSHIP_FIELD_ID) return normalizeSelectValue("", options);
   const configured = normalizeRelationshipDefault(game.settings.get(MODULE_ID, SETTINGS.RELATIONSHIP_DEFAULT));
   if (configured === RELATIONSHIP_DEFAULTS.TOKEN) {
     return isMultiple ? TOKEN_RELATIONSHIP_VALUE : getTokenRelationshipValue(actor, tokenDocument);
   }
   return getRelationshipLabel(configured);
+}
+
+function getInitialTextValue(current, persistedValue = undefined, actorValue = "") {
+  if (persistedValue !== undefined) return String(persistedValue ?? "");
+  if (current?.value) return String(current.value ?? "");
+  return actorValue;
+}
+
+function getActorPathValue(actor, path) {
+  const normalizedPath = normalizeCustomFieldPath(path);
+  if (!actor || !normalizedPath) return "";
+  const candidates = getActorPathCandidates(normalizedPath);
+  for (const candidate of candidates) {
+    const value = foundry.utils.getProperty(actor, candidate);
+    const normalized = normalizePathValue(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function getActorPathCandidates(path) {
+  if (/^(npc|character)\./.test(path)) {
+    const withoutType = path.replace(/^[^.]+\./, "");
+    return [`system.${withoutType}`, withoutType, `system.${path}`, path];
+  }
+  if (/^(actor|document|system|data)\./.test(path)) {
+    if (path.startsWith("actor.")) return [path.slice(6), path];
+    if (path.startsWith("document.")) return [path.slice(9), path];
+    if (path.startsWith("data.")) return [path.slice(5), path];
+    return [path];
+  }
+  return [`system.${path}`, path];
+}
+
+function normalizePathValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Array.isArray(value)) return value.map((entry) => normalizePathValue(entry)).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    if ("label" in value) return normalizePathValue(value.label);
+    if ("name" in value) return normalizePathValue(value.name);
+    if ("value" in value) return normalizePathValue(value.value);
+    return "";
+  }
+  return htmlToText(value).slice(0, 160);
+}
+
+function htmlToText(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const document = new DOMParser().parseFromString(`<main>${text}</main>`, "text/html");
+  return document.body.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 function normalizeRelationshipDefault(value) {
@@ -532,6 +620,7 @@ function readFormState(form) {
     cardStyle: normalizeChoice(formData.get("cardStyle"), CARD_STYLES, CARD_STYLES.PORTRAIT),
     sortMode: normalizeSortMode(formData.get("sortMode")),
     openAfterSave: formData.has("openAfterSave"),
+    includeDescription: formData.has("includeDescription"),
     cardImageSize: formData.get("cardImageSize")
       ? normalizeChoice(formData.get("cardImageSize"), CARD_IMAGE_SIZES, CARD_IMAGE_SIZES.MEDIUM)
       : undefined,
@@ -568,6 +657,7 @@ function getFormStateFromSavedFields(fields = {}) {
   if (Object.prototype.hasOwnProperty.call(fields, "journalUuid")) state.journalUuid = getPersistentFieldValue(fields, "journalUuid");
   if (Object.prototype.hasOwnProperty.call(fields, "pageUuid")) state.pageUuid = getPersistentFieldValue(fields, "pageUuid");
   if (Object.prototype.hasOwnProperty.call(fields, "openAfterSave")) state.openAfterSave = getPersistentFieldValues(fields, "openAfterSave").length > 0;
+  if (Object.prototype.hasOwnProperty.call(fields, "includeDescription")) state.includeDescription = getPersistentFieldValues(fields, "includeDescription").length > 0;
   return state;
 }
 

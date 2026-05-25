@@ -94,6 +94,24 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.npc-log.npc-log-add-actor-app .npc-log-inline-checkbox {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.npc-log.npc-log-add-actor-app .npc-log-inline-checkbox label {
+  font-weight: 600;
+  margin: 0;
+}
+
+.npc-log.npc-log-add-actor-app .npc-log-inline-checkbox input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .npc-log.npc-log-add-actor-app .form-footer {
   margin-top: 0.25rem;
 }
@@ -453,7 +471,7 @@
 }
 
 .npc-log .npc-log-custom-field-row {
-  grid-template-columns: minmax(0, 14rem) minmax(0, 11rem) 2rem;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) 2rem;
 }
 
 .npc-log .npc-log-custom-field-row label.checkbox {

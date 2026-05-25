@@ -272,9 +272,15 @@ function normalizeCustomFields(value) {
 function normalizeCustomField(field) {
   const id = normalizeCustomFieldId(field?.id);
   const label = String(field?.label ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
-  const options = normalizeCustomFieldOptions(field?.options ?? field?.optionsText);
-  const type = options.length ? CUSTOM_FIELD_TYPES.SELECT : CUSTOM_FIELD_TYPES.CHECKBOX;
-  return { id, label, type, options, optionsText: options.join(", ") };
+  const sourceText = getCustomFieldSourceText(field);
+  const options = normalizeCustomFieldOptions(sourceText || field?.options);
+  const path = options.length ? "" : normalizeCustomFieldPath(sourceText);
+  const type = options.length
+    ? CUSTOM_FIELD_TYPES.SELECT
+    : path
+      ? CUSTOM_FIELD_TYPES.TEXT
+      : CUSTOM_FIELD_TYPES.CHECKBOX;
+  return { id, label, path, sourceText, type, options, optionsText: options.length ? options.join(", ") : path };
 }
 
 function normalizeCustomFieldId(value) {
@@ -302,6 +308,8 @@ function createCustomField() {
     id: createCustomFieldId(),
     label: "",
     type: CUSTOM_FIELD_TYPES.CHECKBOX,
+    path: "",
+    sourceText: "",
     options: [],
     optionsText: "",
     enabled: false
@@ -400,9 +408,12 @@ function addSelectedAdditionalField(select, list) {
   const choice = String(select?.value ?? "");
   if (!choice) return;
   const row = select.closest("[data-additional-field-placeholder]");
-  const field = choice === CUSTOM_FIELD_CHOICE
-    ? { ...createCustomField(), kind: "custom", enabled: true }
-    : getAdditionalFieldDefinitions().find((definition) => definition.id === choice);
+  let field = null;
+  if (choice === CUSTOM_FIELD_CHOICE) {
+    field = { ...createCustomField(), kind: "custom", enabled: true };
+  } else {
+    field = getAdditionalFieldDefinitions().find((definition) => definition.id === choice);
+  }
   if (!row || !field) return;
   row.replaceWith(renderAdditionalFieldRow({ ...field, enabled: true }));
   ensureAdditionalFieldPlaceholder(list);
@@ -414,7 +425,9 @@ function ensureAdditionalFieldPlaceholder(list) {
   const placeholders = Array.from(list.querySelectorAll("[data-additional-field-placeholder]"));
   for (const row of placeholders.slice(1)) row.remove();
   const definitions = getCurrentAdditionalFieldDefinitions(list);
-  if (!placeholders.length && definitions.some((field) => !field.enabled)) list.append(renderAdditionalFieldPlaceholder(definitions));
+  if (!placeholders.length && definitions.some((field) => !field.enabled)) {
+    list.append(renderAdditionalFieldPlaceholder(definitions));
+  }
   const placeholder = list.querySelector("[data-additional-field-placeholder]");
   const replacement = renderAdditionalFieldPlaceholder(definitions);
   placeholder?.replaceWith(replacement);
@@ -431,13 +444,38 @@ function ensureAdditionalFieldPlaceholder(list) {
 }
 
 function normalizeCustomFieldOptions(value) {
-  const options = Array.isArray(value)
-    ? value
-    : String(value ?? "").split(/[;,]/);
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value
+      .map((option) => String(option ?? "").replace(/^["']|["']$/g, "").trim())
+      .filter(Boolean)))
+      .slice(0, 24);
+  }
+
+  const text = String(value ?? "").trim();
+  const bracketed = /^\[.*\]$/.test(text);
+  if (!bracketed && !/[;,]/.test(text)) return [];
+
+  const source = bracketed ? text.slice(1, -1) : text;
+  const options = source.split(/[;,]/);
   return Array.from(new Set(options
     .map((option) => String(option ?? "").replace(/^["']|["']$/g, "").trim())
     .filter(Boolean)))
     .slice(0, 24);
+}
+
+function getCustomFieldSourceText(field) {
+  const explicit = String(field?.sourceText ?? field?.source ?? field?.optionsText ?? "").replace(/\s+/g, " ").trim();
+  if (explicit) return explicit.slice(0, 240);
+  const options = normalizeCustomFieldOptions(field?.options);
+  if (options.length) return options.join(", ");
+  return normalizeCustomFieldPath(field?.path ?? field?.pathText);
+}
+
+function normalizeCustomFieldPath(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 240);
 }
 
 function getCurrentAdditionalFieldDefinitions(list) {

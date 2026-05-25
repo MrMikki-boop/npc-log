@@ -30,14 +30,17 @@ NPC Log follows a small Foundry VTT v13 module layout inspired by the Your Flavo
 - **Player visibility without writes**: the optional share setting grants Observer ownership on the target journal while write actions remain GM-only.
 - **System-agnostic first**: actor metadata is optional and guarded. Unsupported systems still work with name, image, and description.
 - **Append, do not replace page content**: the manager appends an owned card block and only replaces blocks marked with this module's actor UUID attribute.
-- **Small API surface**: macros get `addActorToNpcLog`, `getConfiguredTarget`, and `canManage`.
+- **Small API surface**: macros get `addActorToNpcLog`, `addActorsToNpcLog`, `openAddActorDialog`, `getConfiguredTarget`, visibility sync, and `canManage`.
+- **Dialog-first macro flow**: the managed macro opens the same add dialog as Token Controls, so batch review, sorting, custom fields, and description choices stay consistent.
+- **Custom fields as metadata**: user fields are stored as normalized definitions. A field can be a label, a dropdown, or a path resolved from actor data at add time.
 - **Scoped CSS**: UI styles use `.npc-log`, and journal-card styles use `.npc-log-npc-entry`.
 
 ## Extension Points
 
 - Add a new system metadata extractor in `NpcLogManager.#getSystemMetaSettings` and the matching label helpers.
 - Add new card layouts through `CARD_STYLES`, `#renderNpcBlock`, and scoped CSS.
-- Add additional add-dialog options in `AddActorToNpcLogApp`, then pass normalized values to `NpcLogManager.addActorToNpcLog`.
+- Add additional add-dialog options in `AddActorToNpcLogApp`, then pass normalized values to `NpcLogManager.addActorToNpcLog` and `addActorsToNpcLog`.
+- Add new custom-field value sources by extending path normalization in the add dialog and the field normalization in the manager.
 
 ## Packaging Note
 

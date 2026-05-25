@@ -36,6 +36,7 @@ export const ACTOR_SHEET_BUTTON_STYLES = Object.freeze({
 
 export const CUSTOM_FIELD_TYPES = Object.freeze({
   CHECKBOX: "checkbox",
+  TEXT: "text",
   SELECT: "select"
 });
 
