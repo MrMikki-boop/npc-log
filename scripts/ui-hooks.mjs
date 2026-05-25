@@ -121,7 +121,7 @@ function addLegacyHeaderButton(buttons, actor, openAddActorApp) {
   const compact = getActorSheetButtonStyle() === ACTOR_SHEET_BUTTON_STYLES.ICON;
   buttons.unshift({
     label: compact ? "" : label,
-    class: `${buttonClass}${compact ? ` ${buttonClass}--icon` : ""}`,
+    class: buttonClass,
     icon: "fas fa-book",
     title: label,
     onclick: () => openAddActorApp(actor)
