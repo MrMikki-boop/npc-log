@@ -32,6 +32,7 @@ NPC Log follows a small Foundry VTT v13 module layout inspired by the Your Flavo
 - **Append, do not replace page content**: the manager appends an owned card block and only replaces blocks marked with this module's actor UUID attribute.
 - **Small API surface**: macros get `addActorToNpcLog`, `addActorsToNpcLog`, `openAddActorDialog`, `getConfiguredTarget`, visibility sync, and `canManage`.
 - **Dialog-first macro flow**: the managed macro opens the same add dialog as Token Controls, so batch review, sorting, custom fields, and description choices stay consistent.
+- **Preserve Foundry description markup**: actor descriptions are stored as sanitized HTML so `.secret` blocks and normal formatting survive in the journal card.
 - **Custom fields as metadata**: user fields are stored as normalized definitions. A field can be a label, a dropdown, or a path resolved from actor data at add time.
 - **Scoped CSS**: UI styles use `.npc-log`, and journal-card styles use `.npc-log-npc-entry`.
 

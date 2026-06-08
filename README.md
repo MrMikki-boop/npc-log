@@ -12,6 +12,7 @@ The module is system-agnostic by default and includes small integrations for com
 - Review grouped batch selections before saving.
 - Choose portrait art or token art.
 - Add or edit a short description before saving.
+- Preserve actor description HTML, including Foundry `.secret` blocks.
 - Add reusable additional fields per card, including system fields, token relationship, custom labels, actor-data paths, and custom dropdowns.
 - Append cards to a configured JournalEntryPage without replacing unrelated page content.
 - Create a new journal page directly from the add dialog.
@@ -133,7 +134,8 @@ Before release, run a quick in-Foundry smoke pass:
 3. Save them once with **Gallery** and description disabled, then confirm the journal page updates once with a single summary notification.
 4. Add one actor again with duplicate handling set to update, then add it again as a copy.
 5. Add custom fields covering a simple label, a path such as `details.race`, and a comma-separated dropdown.
-6. Confirm old cards still update without losing their description or saved custom fields.
+6. Add an actor with a `.secret` block in its description and confirm the journal card preserves the secret markup.
+7. Confirm old cards still update without losing their description or saved custom fields.
 
 ## Release
 

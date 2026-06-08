@@ -185,8 +185,8 @@ export class NpcLogManager {
     ];
 
     for (const value of candidateHtml) {
-      const text = this.#htmlToText(value);
-      if (text) return this.#truncateDescription(text);
+      const html = this.#normalizeDescription(value, { allowHtml: true });
+      if (html) return html;
     }
 
     const combined = candidateText.map((value) => this.#htmlToText(value)).filter(Boolean).join(" ");
@@ -509,8 +509,8 @@ export class NpcLogManager {
   #getActorDescriptionFromEntry(entry) {
     const description = entry?.querySelector?.(`.${MODULE_ID}-npc-entry__description`);
     if (!description || description.classList.contains(`${MODULE_ID}-npc-entry__description--empty`)) return null;
-    const text = description.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    return text || null;
+    const html = this.#normalizeDescription(description.innerHTML, { allowHtml: true });
+    return html || null;
   }
 
   #getActorCustomFieldsFromContent(content, actorUuid) {
@@ -577,7 +577,7 @@ export class NpcLogManager {
     const includeDescription = options.includeDescription !== false;
     const existingDescription = includeDescription && duplicate ? this.#getActorDescriptionFromEntry(existingEntry) : null;
     const description = includeDescription
-      ? this.#normalizeDescription(options.description ?? existingDescription ?? this.getSuggestedDescription(actor))
+      ? this.#normalizeDescription(options.description ?? existingDescription ?? this.getSuggestedDescription(actor), { allowHtml: true })
       : "";
     const summary = this.#getActorSummary(actor);
     const existingCustomFields = duplicate ? this.#getActorCustomFieldsFromEntry(existingEntry) : [];
@@ -681,7 +681,7 @@ export class NpcLogManager {
     const escape = foundry.utils.escapeHTML;
     const descriptionHtml = includeDescription
       ? description
-        ? `<p class="${MODULE_ID}-npc-entry__description">${escape(description)}</p>`
+        ? `<div class="${MODULE_ID}-npc-entry__description">${description}</div>`
         : `<p class="${MODULE_ID}-npc-entry__description ${MODULE_ID}-npc-entry__description--empty">${escape(game.i18n.localize("NPCLOG.Journal.NoDescription"))}</p>`
       : "";
     const metaHtml = this.#renderMetaList(summary, customFields);
@@ -744,8 +744,16 @@ export class NpcLogManager {
     return localized?.trim() || name;
   }
 
-  #normalizeDescription(value) {
-    return this.#truncateDescription(this.#htmlToText(value));
+  #normalizeDescription(value, { allowHtml = false } = {}) {
+    if (typeof value !== "string") return "";
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+
+    if (!allowHtml || !/<[a-z][\s\S]*>/i.test(trimmed)) {
+      return foundry.utils.escapeHTML(this.#truncateDescription(this.#htmlToText(trimmed) || trimmed));
+    }
+
+    return this.#sanitizeDescriptionHtml(trimmed);
   }
 
   #htmlToText(value) {
@@ -760,6 +768,31 @@ export class NpcLogManager {
     const text = String(value ?? "").replace(/\s+/g, " ").trim();
     if (text.length <= 700) return text;
     return `${text.slice(0, 697).trimEnd()}...`;
+  }
+
+  #sanitizeDescriptionHtml(value) {
+    const document = new DOMParser().parseFromString(`<main>${value}</main>`, "text/html");
+    const main = document.body.firstElementChild;
+    if (!main) return "";
+
+    const blocked = "script, style, iframe, object, embed, form, input, button, select, textarea, link, meta";
+    for (const element of Array.from(main.querySelectorAll(blocked))) element.remove();
+
+    for (const element of Array.from(main.querySelectorAll("*"))) {
+      for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase();
+        const value = attribute.value.trim();
+        if (name.startsWith("on")) {
+          element.removeAttribute(attribute.name);
+          continue;
+        }
+        if ((name === "href" || name === "src") && /^javascript:/i.test(value)) {
+          element.removeAttribute(attribute.name);
+        }
+      }
+    }
+
+    return main.innerHTML.trim();
   }
 
   #localizeConfigLabel(value, choices) {
